@@ -18,7 +18,7 @@ def log(message, file=stdout):
 
 
 def dump(src: Path, dest: Path):
-    with open(src, 'r') as s, open(dest, 'w') as d:
+    with open(src, 'rb') as s, open(dest, 'wb') as d:
         d.write(s.read())
 
 
