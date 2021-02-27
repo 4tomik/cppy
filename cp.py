@@ -60,8 +60,13 @@ def copy(src: Path, dest: Path):
     if src.is_file():
         copy_file(src, dest)
     elif src.is_dir():
-        if not dest.is_dir() and dest.exists():
+        is_dir = dest.is_dir()
+        if not is_dir and dest.exists():
             raise CpError(f'Destination {dest} is not a directory')
+        if not args.recursive:
+            raise CpError(f'Skipping directory {src} because -r is not present')
+        if is_dir:
+            dest = dest / src.name
         dest.mkdir(exist_ok=True)
         copy_directory(src, dest)
     else:
