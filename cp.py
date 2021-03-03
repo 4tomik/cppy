@@ -9,12 +9,25 @@ class CpError(Exception):
     pass
 
 
-args: argparse.Namespace = None
+class Logger:
+    def __init__(self, verbose=False):
+        self.verbose = verbose
+
+    def set_verbosity(self, verbosity):
+        self.verbose = verbosity
+
+    def log(self, message):
+        if self.verbose:
+            print(message)
+
+    def warn(self, message, file=stderr):
+        print(f'WARNING: {message}', file=file)
+
+    def error(self, message, file=stderr):
+        print(f'ERROR: {message}', file=file)
 
 
-def log(message, file=stdout):
-    if args.verbose or file == stderr:
-        print(message, file=file)
+logger = Logger()
 
 
 def dump(src: Path, dest: Path):
@@ -22,53 +35,53 @@ def dump(src: Path, dest: Path):
         d.write(s.read())
 
 
-def copy_directory(src_dir: Path, dest_dir: Path):
+def copy_directory(src_dir: Path, dest_dir: Path, override=False, interactive=False):
     for src_child in src_dir.iterdir():
         dest_child = dest_dir / src_child.name
         if src_child.is_dir():
             dest_child.mkdir(exist_ok=True)
-            log(f'Recursing into {src_child}')
+            logger.log(f'Recursing into {src_child}')
             copy_directory(src_child, dest_child)
         elif src_child.is_file():
             confirmed = True
             if dest_child.is_file():
-                if args.interactive:
+                if interactive:
                     confirmed = 'y' in input(f'Override {dest_child} ? [n/y] ').lower()
-                elif not args.override:
+                elif not override:
                     confirmed = False
-                    log(f'Skipping {src_child} -> {dest_child} as -o is not present')
+                    logger.warn(f'Skipping {src_child} -> {dest_child} as -o is not present')
 
             if confirmed:
                 dest_child.touch()
                 dump(src_child, dest_child)
-                log(f'Copy {src_child} -> {dest_child}')
+                logger.log(f'Copy {src_child} -> {dest_child}')
         else:
-            log(f'Skipping {src_child} because file type is not supported', file=stderr)
+            logger.error(f'Skipping {src_child} because file type is not supported', file=stderr)
 
 
-def copy_file(src: Path, dest: Path):
+def copy_file(src: Path, dest: Path, override=False):
     if dest.is_dir():
         dest = dest / src.name
-    if dest.is_file() and not args.override:
+    if dest.is_file() and not override:
         raise CpError(f'Cannot override "{dest}", specify -o option')
     dest.touch()
     dump(src, dest)
-    log(f'{src} -> {dest}')
+    logger.log(f'{src} -> {dest}')
 
 
-def copy(src: Path, dest: Path):
+def copy(src: Path, dest: Path, recursive=False, override=False, interactive=False):
     if src.is_file():
-        copy_file(src, dest)
+        copy_file(src, dest, override)
     elif src.is_dir():
         is_dir = dest.is_dir()
         if not is_dir and dest.exists():
             raise CpError(f'Destination {dest} is not a directory')
-        if not args.recursive:
+        if not recursive:
             raise CpError(f'Skipping directory {src} because -r is not present')
         if is_dir:
             dest = dest / src.name
         dest.mkdir(exist_ok=True)
-        copy_directory(src, dest)
+        copy_directory(src, dest, override, interactive)
     else:
         raise CpError(f'File type not supported')
 
@@ -114,12 +127,12 @@ def cli() -> argparse.Namespace:
 
 
 def main():
-    global args
     args = cli()
     try:
-        copy(args.source, args.destination)
+        logger.set_verbosity(args.verbose)
+        copy(args.source, args.destination, args.recursive, args.override, args.interactive)
     except CpError as e:
-        print(e, file=stderr)
+        logger.error(e)
         exit(1)
 
 
